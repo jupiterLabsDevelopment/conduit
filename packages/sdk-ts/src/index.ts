@@ -127,12 +127,17 @@ const deriveWsBase = (httpBase?: string | null): string => {
 };
 
 const resolveFetch = (custom?: typeof fetch): typeof fetch => {
-  if (custom) {
+  if (typeof custom === "function") {
     return custom;
   }
-  if (typeof fetch !== "undefined") {
-    return fetch;
+
+  const globalFetch: typeof fetch | undefined =
+    typeof fetch === "function" ? fetch : (globalThis as { fetch?: typeof fetch }).fetch;
+
+  if (typeof globalFetch === "function") {
+    return globalFetch.bind(globalThis) as typeof fetch;
   }
+
   throw new Error("No fetch implementation available. Provide one via options.fetchImpl");
 };
 
