@@ -1,20 +1,26 @@
 # syntax=docker/dockerfile:1.6
 
-FROM cgr.dev/chainguard/go:1.25 AS build
+FROM golang:1.25-bookworm AS builder
 WORKDIR /src
-COPY go.work ./
+
+# Prime module cache
+COPY go.work go.work.sum ./
 COPY apps/api/go.mod apps/api/go.sum ./apps/api/
 COPY agents/mc-agent/go.mod ./agents/mc-agent/
+RUN --mount=type=cache,target=/go/pkg/mod go work sync
+
+# Copy full workspace and build binary
 COPY . .
 WORKDIR /src/apps/api
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/conduit-api ./cmd/api
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 
-FROM gcr.io/distroless/base-nonroot:latest
+FROM gcr.io/distroless/static-debian12:nonroot
 ENV PORT=8080
 WORKDIR /app
-COPY --from=build /out/conduit-api /usr/local/bin/conduit-api
-USER nonroot
+COPY --from=builder /out/api /api
+USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/conduit-api"]
+ENTRYPOINT ["/api"]

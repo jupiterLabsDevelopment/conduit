@@ -272,7 +272,7 @@ Follow these steps to serve the Minecraft management endpoint over TLS with a cu
 
 6. **Update the Conduit agent**
     * Set `MC_MGMT_WS` to the `wss://` endpoint and, if using a private CA, point `MC_TLS_ROOT_CA` at the PEM bundle that contains the issuing certificate.
-   * Leave `MC_TLS_MODE` at `strict` for production. Only use `MC_TLS_MODE=skip` while testing self-signed certs (the legacy `MC_TLS_INSECURE` flag is still honored but should be avoided).
+    * Leave `MC_TLS_MODE` at `strict` for production. Only use `MC_TLS_MODE=skip` while testing self-signed certs (the legacy `MC_TLS_INSECURE` flag is still honored but should be avoided).
 
 > **Tip:** Rotate the keystore password periodically and update any systemd secrets or environment files in lockstep. Recycle the Minecraft management process after each rotation.
 

@@ -1,0 +1,14 @@
+.git
+**/.git
+node_modules
+**/node_modules
+apps/ui/dist
+apps/ui/build
+apps/ui/.cache
+apps/ui/tmp
+**/.DS_Store
+**/*.log
+coverage
+build
+.tmp
+.cache
