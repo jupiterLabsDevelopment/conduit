@@ -82,7 +82,7 @@ MC_MGMT_TOKEN=super-secret-token
    docker compose --project-directory deploy up --build
    ```
 
-3. Wait for services: Postgres, API (`:8080`), UI (`:5173`), and agent (`:9000`).
+3. Wait for services: Postgres (`:5432`), API (`:8080`), UI (`:5173`). The agent runs as an internal sidecar and does not expose a host port; check `docker compose logs agent` for its status.
 4. Visit `http://localhost:5173` to access the admin UI.
 
 To stop the stack:
@@ -290,7 +290,7 @@ Follow these steps to serve the Minecraft management endpoint over TLS with a cu
 ## 13. Upgrade Notes
 
 * Agents must be restarted to pick up the new telemetry and backoff knobs. Existing env files remain compatible; new fields are optional with safe defaults.
-* The UI now surfaces bulk game rule presets. Moderators should review preset definitions in the API if customising before applying in production.
+* The UI now surfaces bulk game rule presets. Moderators should review preset definitions in the API if customizing before applying in production.
 * When adding bespoke TLS roots, ensure the PEM bundle is mounted into the agent container and referenced by `MC_TLS_ROOT_CA`.
 
 ---

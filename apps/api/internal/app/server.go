@@ -400,7 +400,11 @@ func (a *App) handleServerEvents(w http.ResponseWriter, r *http.Request) {
 		a.Logger.Error("ws accept failed", slog.Any("err", err))
 		return
 	}
-	defer conn.Close(websocket.StatusInternalError, "closed")
+	closeStatus := websocket.StatusNormalClosure
+	closeReason := "normal closure"
+	defer func() {
+		_ = conn.Close(closeStatus, closeReason)
+	}()
 
 	client := a.Hub.RegisterClient(serverID, conn)
 	defer a.Hub.removeClient(serverID, client)
@@ -410,6 +414,24 @@ func (a *App) handleServerEvents(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		if _, _, err := conn.Read(ctx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				closeReason = "context canceled"
+				return
+			}
+
+			status := websocket.CloseStatus(err)
+			switch status {
+			case websocket.StatusNormalClosure, websocket.StatusGoingAway:
+				closeStatus = websocket.StatusNormalClosure
+				closeReason = "client closed"
+			case -1:
+				closeStatus = websocket.StatusInternalError
+				closeReason = "read failed"
+				a.Logger.Warn("ws read error", slog.String("server_id", serverID), slog.Any("err", err))
+			default:
+				closeStatus = status
+				closeReason = "closing"
+			}
 			return
 		}
 	}
