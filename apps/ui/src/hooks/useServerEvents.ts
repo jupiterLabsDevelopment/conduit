@@ -18,7 +18,17 @@ export const useServerEvents = (serverId: string | undefined) => {
       return;
     }
 
-    const socket = api.openServerEvents(serverId);
+    let socket: ReturnType<typeof api.openServerEvents> | null = null;
+    try {
+      socket = api.openServerEvents(serverId);
+    } catch (err) {
+      console.warn("Failed to open server events", err);
+      return;
+    }
+
+    if (!socket) {
+      return;
+    }
     socket.onmessage = (evt) => {
       try {
         const frame = JSON.parse(evt.data) as Record<string, unknown>;

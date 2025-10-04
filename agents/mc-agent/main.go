@@ -286,12 +286,7 @@ func (s *session) run(ctx context.Context) error {
 	s.logger.Info("bridge established", slog.String("api", s.cfg.APIURL), slog.String("minecraft", s.cfg.MCURL))
 	s.metrics.recordBridgeEstablished()
 
-	if err := s.sendDiscover(ctx); err != nil {
-		s.logger.Warn("rpc.discover failed", slog.Any("err", err))
-		s.metrics.recordDiscover(false, err)
-	} else {
-		s.metrics.recordDiscover(true, nil)
-	}
+	go s.discoverLoop(ctx)
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- s.pipeAPIToMC(ctx) }()
@@ -317,6 +312,50 @@ func (s *session) close() {
 
 	s.apiConn.Close(websocket.StatusNormalClosure, "session closed")
 	s.mcConn.Close(websocket.StatusNormalClosure, "session closed")
+}
+
+func (s *session) discoverLoop(ctx context.Context) {
+	backoff := 5 * time.Second
+	attempt := 0
+
+	for {
+		attempt++
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		err := s.sendDiscover(ctx)
+		if err == nil {
+			if attempt > 1 {
+				s.logger.Info("rpc.discover succeeded", slog.Int("attempt", attempt))
+			}
+			s.metrics.recordDiscover(true, nil)
+			return
+		}
+
+		if errors.Is(err, context.Canceled) || websocket.CloseStatus(err) != -1 {
+			return
+		}
+
+		s.logger.Warn("rpc.discover attempt failed", slog.Int("attempt", attempt), slog.Any("err", err))
+		s.metrics.recordDiscover(false, err)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+
+		if backoff < time.Minute {
+			backoff *= 2
+			if backoff > time.Minute {
+				backoff = time.Minute
+			}
+		}
+	}
 }
 
 func (s *session) removePending(idKey string) chan []byte {
