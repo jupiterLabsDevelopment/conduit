@@ -10,11 +10,18 @@ type rbacRule struct {
 var rbacRules = []rbacRule{
 	{prefix: "minecraft:server/stop", role: RoleOwner},
 	{prefix: "minecraft:server/save", role: RoleModerator},
+	{prefix: "minecraft:server/system_message", role: RoleModerator},
+	{prefix: "minecraft:server/status", role: RoleViewer},
+	{prefix: "minecraft:players", role: RoleViewer},
+	{prefix: "minecraft:gamerules/update", role: RoleModerator},
+	{prefix: "minecraft:gamerules", role: RoleViewer},
+	{prefix: "minecraft:serversettings/", role: RoleModerator},
 	{prefix: "minecraft:allowlist/", role: RoleModerator},
+	{prefix: "minecraft:allowlist", role: RoleViewer},
 	{prefix: "minecraft:operators/", role: RoleModerator},
-	{prefix: "minecraft:gamerule/", role: RoleModerator},
-	{prefix: "minecraft:settings/", role: RoleModerator},
-	{prefix: "minecraft:players/list", role: RoleViewer},
+	{prefix: "minecraft:operators", role: RoleModerator},
+	{prefix: "minecraft:bans", role: RoleModerator},
+	{prefix: "minecraft:ip_bans", role: RoleModerator},
 }
 
 func roleForMethod(method string) Role {

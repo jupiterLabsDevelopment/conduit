@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,35 @@ type applyPresetResponse struct {
 	Duration int64                     `json:"duration_ms"`
 }
 
+type serverSettingRPC struct {
+	Method string
+	Param  string
+	Coerce func(any) (any, error)
+}
+
+var serverSettingCommands = map[string]serverSettingRPC{
+	"difficulty":                     {Method: "minecraft:serversettings/difficulty/set", Param: "difficulty", Coerce: coerceEnumValue("peaceful", "easy", "normal", "hard")},
+	"allow_flight":                   {Method: "minecraft:serversettings/allow_flight/set", Param: "allow", Coerce: coerceBoolValue},
+	"enforce_allowlist":              {Method: "minecraft:serversettings/enforce_allowlist/set", Param: "enforce", Coerce: coerceBoolValue},
+	"use_allowlist":                  {Method: "minecraft:serversettings/use_allowlist/set", Param: "use", Coerce: coerceBoolValue},
+	"max_players":                    {Method: "minecraft:serversettings/max_players/set", Param: "max", Coerce: coerceIntValue},
+	"pause_when_empty_seconds":       {Method: "minecraft:serversettings/pause_when_empty_seconds/set", Param: "seconds", Coerce: coerceIntValue},
+	"player_idle_timeout":            {Method: "minecraft:serversettings/player_idle_timeout/set", Param: "seconds", Coerce: coerceIntValue},
+	"motd":                           {Method: "minecraft:serversettings/motd/set", Param: "message", Coerce: coerceStringValue},
+	"spawn_protection_radius":        {Method: "minecraft:serversettings/spawn_protection_radius/set", Param: "radius", Coerce: coerceIntValue},
+	"force_game_mode":                {Method: "minecraft:serversettings/force_game_mode/set", Param: "force", Coerce: coerceBoolValue},
+	"game_mode":                      {Method: "minecraft:serversettings/game_mode/set", Param: "mode", Coerce: coerceEnumValue("survival", "creative", "adventure", "spectator")},
+	"view_distance":                  {Method: "minecraft:serversettings/view_distance/set", Param: "distance", Coerce: coerceIntValue},
+	"simulation_distance":            {Method: "minecraft:serversettings/simulation_distance/set", Param: "distance", Coerce: coerceIntValue},
+	"accept_transfers":               {Method: "minecraft:serversettings/accept_transfers/set", Param: "accept", Coerce: coerceBoolValue},
+	"status_heartbeat_interval":      {Method: "minecraft:serversettings/status_heartbeat_interval/set", Param: "seconds", Coerce: coerceIntValue},
+	"operator_user_permission_level": {Method: "minecraft:serversettings/operator_user_permission_level/set", Param: "level", Coerce: coerceIntValue},
+	"hide_online_players":            {Method: "minecraft:serversettings/hide_online_players/set", Param: "hide", Coerce: coerceBoolValue},
+	"status_replies":                 {Method: "minecraft:serversettings/status_replies/set", Param: "enable", Coerce: coerceBoolValue},
+	"entity_broadcast_range":         {Method: "minecraft:serversettings/entity_broadcast_range/set", Param: "percentage_points", Coerce: coerceIntValue},
+	"autosave":                       {Method: "minecraft:serversettings/autosave/set", Param: "enable", Coerce: coerceBoolValue},
+}
+
 var defaultPresets = []GameRulePreset{
 	{
 		Key:         "builder-friendly",
@@ -51,8 +81,9 @@ var defaultPresets = []GameRulePreset{
 			"doFireTick":      false,
 		},
 		Settings: map[string]any{
-			"difficulty": "peaceful",
-			"pvp":        false,
+			"difficulty":        "peaceful",
+			"allow_flight":      true,
+			"enforce_allowlist": true,
 		},
 	},
 	{
@@ -66,8 +97,9 @@ var defaultPresets = []GameRulePreset{
 			"fallDamage":          true,
 		},
 		Settings: map[string]any{
-			"difficulty": "hard",
-			"pvp":        true,
+			"difficulty":        "hard",
+			"enforce_allowlist": true,
+			"allow_flight":      false,
 		},
 	},
 }
@@ -114,7 +146,7 @@ func (a *App) handleApplyGameRulePreset(w http.ResponseWriter, r *http.Request) 
 	start := time.Now()
 
 	for name, value := range preset.GameRules {
-		res := a.applyMinecraftSetting(ctx, agent, serverID, user, "minecraft:gamerule/set", []any{name, value})
+		res := a.applyMinecraftGameRule(ctx, agent, serverID, user, name, value)
 		res.Type = "gamerule"
 		res.Name = name
 		res.Value = value
@@ -122,7 +154,7 @@ func (a *App) handleApplyGameRulePreset(w http.ResponseWriter, r *http.Request) 
 	}
 
 	for name, value := range preset.Settings {
-		res := a.applyMinecraftSetting(ctx, agent, serverID, user, "minecraft:settings/set", []any{name, value})
+		res := a.applyMinecraftServerSetting(ctx, agent, serverID, user, name, value)
 		res.Type = "setting"
 		res.Name = name
 		res.Value = value
@@ -138,13 +170,20 @@ func (a *App) handleApplyGameRulePreset(w http.ResponseWriter, r *http.Request) 
 	a.writeJSON(w, response)
 }
 
-func (a *App) applyMinecraftSetting(ctx context.Context, agent *AgentConn, serverID string, user *AuthUser, method string, params []any) presetApplicationResult {
+func (a *App) applyMinecraftGameRule(ctx context.Context, agent *AgentConn, serverID string, user *AuthUser, name string, value any) presetApplicationResult {
+	params := map[string]any{
+		"gamerule": map[string]any{
+			"key":   name,
+			"value": stringifyGameRuleValue(value),
+		},
+	}
+
 	payload, err := json.Marshal(params)
 	if err != nil {
 		return presetApplicationResult{Status: "error", Message: fmt.Sprintf("marshal params: %v", err)}
 	}
 
-	frame := JSONRPC{Method: method, Params: json.RawMessage(payload)}
+	frame := JSONRPC{Method: "minecraft:gamerules/update", Params: json.RawMessage(payload)}
 
 	resp, callErr := agent.Call(ctx, frame)
 	status := "ok"
@@ -161,12 +200,166 @@ func (a *App) applyMinecraftSetting(ctx context.Context, agent *AgentConn, serve
 	if status != "ok" && message != "" {
 		auditErr = errors.New(message)
 	}
-	a.recordAudit(ctx, user.ID, serverID, method, json.RawMessage(payload), status, auditErr)
+	a.recordAudit(ctx, user.ID, serverID, frame.Method, json.RawMessage(payload), status, auditErr)
 
 	if status == "ok" {
 		return presetApplicationResult{Status: status}
 	}
 	return presetApplicationResult{Status: status, Message: message}
+}
+
+func (a *App) applyMinecraftServerSetting(ctx context.Context, agent *AgentConn, serverID string, user *AuthUser, name string, value any) presetApplicationResult {
+	cmd, ok := serverSettingCommands[name]
+	if !ok {
+		return presetApplicationResult{Status: "error", Message: fmt.Sprintf("unsupported setting %q", name)}
+	}
+
+	coerced := value
+	if cmd.Coerce != nil {
+		var err error
+		coerced, err = cmd.Coerce(value)
+		if err != nil {
+			return presetApplicationResult{Status: "error", Message: err.Error()}
+		}
+	}
+
+	params := map[string]any{cmd.Param: coerced}
+	payload, err := json.Marshal(params)
+	if err != nil {
+		return presetApplicationResult{Status: "error", Message: fmt.Sprintf("marshal params: %v", err)}
+	}
+
+	frame := JSONRPC{Method: cmd.Method, Params: json.RawMessage(payload)}
+
+	resp, callErr := agent.Call(ctx, frame)
+	status := "ok"
+	message := ""
+	if callErr != nil {
+		status = "error"
+		message = callErr.Error()
+	} else if err := decodeJSONRPCError(resp); err != nil {
+		status = "error"
+		message = err.Error()
+	}
+
+	var auditErr error
+	if status != "ok" && message != "" {
+		auditErr = errors.New(message)
+	}
+	a.recordAudit(ctx, user.ID, serverID, frame.Method, json.RawMessage(payload), status, auditErr)
+
+	if status == "ok" {
+		return presetApplicationResult{Status: status}
+	}
+	return presetApplicationResult{Status: status, Message: message}
+}
+
+func stringifyGameRuleValue(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", value)
+	}
+}
+
+func coerceBoolValue(value any) (any, error) {
+	switch v := value.(type) {
+	case bool:
+		return v, nil
+	case string:
+		trimmed := strings.TrimSpace(strings.ToLower(v))
+		switch trimmed {
+		case "true", "1", "yes", "on":
+			return true, nil
+		case "false", "0", "no", "off":
+			return false, nil
+		default:
+			return nil, fmt.Errorf("invalid boolean value %q", v)
+		}
+	case int:
+		return v != 0, nil
+	case int32:
+		return v != 0, nil
+	case int64:
+		return v != 0, nil
+	case float64:
+		return v != 0, nil
+	default:
+		return nil, fmt.Errorf("invalid boolean value type %T", value)
+	}
+}
+
+func coerceIntValue(value any) (any, error) {
+	switch v := value.(type) {
+	case int:
+		return v, nil
+	case int32:
+		return int(v), nil
+	case int64:
+		return int(v), nil
+	case float64:
+		return int(v), nil
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return nil, errors.New("empty integer value")
+		}
+		i, err := strconv.Atoi(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("invalid integer value %q", v)
+		}
+		return i, nil
+	case json.Number:
+		i, err := v.Int64()
+		if err != nil {
+			return nil, err
+		}
+		return int(i), nil
+	default:
+		return nil, fmt.Errorf("invalid integer value type %T", value)
+	}
+}
+
+func coerceStringValue(value any) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case fmt.Stringer:
+		return v.String(), nil
+	case []byte:
+		return string(v), nil
+	default:
+		return fmt.Sprintf("%v", value), nil
+	}
+}
+
+func coerceEnumValue(valid ...string) func(any) (any, error) {
+	allowed := make(map[string]struct{}, len(valid))
+	for _, v := range valid {
+		allowed[strings.ToLower(v)] = struct{}{}
+	}
+	return func(value any) (any, error) {
+		strAny, err := coerceStringValue(value)
+		if err != nil {
+			return nil, err
+		}
+		str := strings.ToLower(strings.TrimSpace(strAny.(string)))
+		if str == "" {
+			return nil, fmt.Errorf("invalid value %q", value)
+		}
+		if _, ok := allowed[str]; !ok {
+			return nil, fmt.Errorf("invalid value %q; expected one of %v", value, valid)
+		}
+		return str, nil
+	}
 }
 
 func decodeJSONRPCError(data []byte) error {

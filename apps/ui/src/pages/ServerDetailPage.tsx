@@ -11,23 +11,248 @@ type TabKey = "overview" | "players" | "gamerules" | "settings" | "audit";
 
 interface AllowlistEntry {
   name: string;
-  uuid?: string;
+  id?: string;
 }
 
 interface OperatorEntry {
   name: string;
-  permission?: string;
+  id?: string;
+  permissionLevel?: number;
+  bypassesPlayerLimit?: boolean;
+}
+
+interface PlayerEntry {
+  name: string;
+  id?: string;
+}
+
+type BanType = "player" | "ip";
+
+interface BanEntry {
+  target: string;
+  type: BanType;
+  id?: string;
+  reason?: string;
+  createdAt?: string;
+  expiresAt?: string | null;
+  source?: string;
 }
 
 interface RuleEntry {
-  name: string;
+  key: string;
+  type: string;
   value: unknown;
 }
 
+type ServerSettingType = "boolean" | "integer" | "string" | "enum";
+
 interface SettingEntry {
-  name: string;
+  id: string;
+  label: string;
   value: unknown;
+  type: ServerSettingType;
+  options?: string[];
 }
+
+interface ServerSettingDescriptor {
+  id: string;
+  label: string;
+  getMethod: string;
+  resultKey?: string;
+  setMethod: string;
+  paramKey: string;
+  type: ServerSettingType;
+  options?: string[];
+}
+
+const SERVER_SETTING_DESCRIPTORS: ServerSettingDescriptor[] = [
+  {
+    id: "difficulty",
+    label: "Difficulty",
+    getMethod: "minecraft:serversettings/difficulty",
+    resultKey: "difficulty",
+    setMethod: "minecraft:serversettings/difficulty/set",
+    paramKey: "difficulty",
+    type: "enum",
+    options: ["peaceful", "easy", "normal", "hard"],
+  },
+  {
+    id: "allow_flight",
+    label: "Allow flight",
+    getMethod: "minecraft:serversettings/allow_flight",
+    resultKey: "allowed",
+    setMethod: "minecraft:serversettings/allow_flight/set",
+    paramKey: "allow",
+    type: "boolean",
+  },
+  {
+    id: "enforce_allowlist",
+    label: "Enforce allowlist",
+    getMethod: "minecraft:serversettings/enforce_allowlist",
+    resultKey: "enforced",
+    setMethod: "minecraft:serversettings/enforce_allowlist/set",
+    paramKey: "enforce",
+    type: "boolean",
+  },
+  {
+    id: "use_allowlist",
+    label: "Use allowlist",
+    getMethod: "minecraft:serversettings/use_allowlist",
+    resultKey: "used",
+    setMethod: "minecraft:serversettings/use_allowlist/set",
+    paramKey: "use",
+    type: "boolean",
+  },
+  {
+    id: "max_players",
+    label: "Max players",
+    getMethod: "minecraft:serversettings/max_players",
+    resultKey: "max",
+    setMethod: "minecraft:serversettings/max_players/set",
+    paramKey: "max",
+    type: "integer",
+  },
+  {
+    id: "player_idle_timeout",
+    label: "Player idle timeout (seconds)",
+    getMethod: "minecraft:serversettings/player_idle_timeout",
+    resultKey: "seconds",
+    setMethod: "minecraft:serversettings/player_idle_timeout/set",
+    paramKey: "seconds",
+    type: "integer",
+  },
+  {
+    id: "pause_when_empty_seconds",
+    label: "Pause when empty (seconds)",
+    getMethod: "minecraft:serversettings/pause_when_empty_seconds",
+    resultKey: "seconds",
+    setMethod: "minecraft:serversettings/pause_when_empty_seconds/set",
+    paramKey: "seconds",
+    type: "integer",
+  },
+  {
+    id: "view_distance",
+    label: "View distance",
+    getMethod: "minecraft:serversettings/view_distance",
+    resultKey: "distance",
+    setMethod: "minecraft:serversettings/view_distance/set",
+    paramKey: "distance",
+    type: "integer",
+  },
+  {
+    id: "simulation_distance",
+    label: "Simulation distance",
+    getMethod: "minecraft:serversettings/simulation_distance",
+    resultKey: "distance",
+    setMethod: "minecraft:serversettings/simulation_distance/set",
+    paramKey: "distance",
+    type: "integer",
+  },
+  {
+    id: "accept_transfers",
+    label: "Accept transfers",
+    getMethod: "minecraft:serversettings/accept_transfers",
+    resultKey: "accepted",
+    setMethod: "minecraft:serversettings/accept_transfers/set",
+    paramKey: "accept",
+    type: "boolean",
+  },
+  {
+    id: "status_replies",
+    label: "Status replies enabled",
+    getMethod: "minecraft:serversettings/status_replies",
+    resultKey: "enabled",
+    setMethod: "minecraft:serversettings/status_replies/set",
+    paramKey: "enable",
+    type: "boolean",
+  },
+  {
+    id: "hide_online_players",
+    label: "Hide online players",
+    getMethod: "minecraft:serversettings/hide_online_players",
+    resultKey: "hidden",
+    setMethod: "minecraft:serversettings/hide_online_players/set",
+    paramKey: "hide",
+    type: "boolean",
+  },
+  {
+    id: "autosave",
+    label: "Autosave enabled",
+    getMethod: "minecraft:serversettings/autosave",
+    resultKey: "enabled",
+    setMethod: "minecraft:serversettings/autosave/set",
+    paramKey: "enable",
+    type: "boolean",
+  },
+  {
+    id: "status_heartbeat_interval",
+    label: "Status heartbeat interval (seconds)",
+    getMethod: "minecraft:serversettings/status_heartbeat_interval",
+    resultKey: "seconds",
+    setMethod: "minecraft:serversettings/status_heartbeat_interval/set",
+    paramKey: "seconds",
+    type: "integer",
+  },
+  {
+    id: "operator_user_permission_level",
+    label: "Operator permission level",
+    getMethod: "minecraft:serversettings/operator_user_permission_level",
+    resultKey: "level",
+    setMethod: "minecraft:serversettings/operator_user_permission_level/set",
+    paramKey: "level",
+    type: "integer",
+  },
+  {
+    id: "entity_broadcast_range",
+    label: "Entity broadcast range (%)",
+    getMethod: "minecraft:serversettings/entity_broadcast_range",
+    resultKey: "percentage_points",
+    setMethod: "minecraft:serversettings/entity_broadcast_range/set",
+    paramKey: "percentage_points",
+    type: "integer",
+  },
+  {
+    id: "game_mode",
+    label: "Default game mode",
+    getMethod: "minecraft:serversettings/game_mode",
+    resultKey: "mode",
+    setMethod: "minecraft:serversettings/game_mode/set",
+    paramKey: "mode",
+    type: "enum",
+    options: ["survival", "creative", "adventure", "spectator"],
+  },
+  {
+    id: "force_game_mode",
+    label: "Force default game mode",
+    getMethod: "minecraft:serversettings/force_game_mode",
+    resultKey: "forced",
+    setMethod: "minecraft:serversettings/force_game_mode/set",
+    paramKey: "force",
+    type: "boolean",
+  },
+  {
+    id: "spawn_protection_radius",
+    label: "Spawn protection radius",
+    getMethod: "minecraft:serversettings/spawn_protection_radius",
+    resultKey: "radius",
+    setMethod: "minecraft:serversettings/spawn_protection_radius/set",
+    paramKey: "radius",
+    type: "integer",
+  },
+  {
+    id: "motd",
+    label: "Message of the day",
+    getMethod: "minecraft:serversettings/motd",
+    resultKey: "message",
+    setMethod: "minecraft:serversettings/motd/set",
+    paramKey: "message",
+    type: "string",
+  },
+];
+
+const SERVER_SETTING_LOOKUP = new Map<string, ServerSettingDescriptor>(
+  SERVER_SETTING_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor])
+);
 
 const tabs: Array<{ id: TabKey; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -61,26 +286,333 @@ const displayValue = (value: unknown): string => {
   }
 };
 
-const coerceInputValue = (input: string, current: unknown): unknown => {
-  const trimmed = input.trim();
-  if (typeof current === "boolean") {
-    return trimmed.toLowerCase() === "true";
-  }
-  if (typeof current === "number") {
-    const num = Number(trimmed);
-    return Number.isNaN(num) ? current : num;
-  }
-  if (trimmed.toLowerCase() === "true") {
+const parseBooleanInput = (raw: string): boolean | null => {
+  const normalized = raw.trim().toLowerCase();
+  if (["true", "1", "yes", "on", "enable", "enabled"].includes(normalized)) {
     return true;
   }
-  if (trimmed.toLowerCase() === "false") {
+  if (["false", "0", "no", "off", "disable", "disabled"].includes(normalized)) {
     return false;
   }
-  const num = Number(trimmed);
-  if (!Number.isNaN(num) && trimmed !== "") {
-    return num;
+  return null;
+};
+
+const parseIntegerInput = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return null;
   }
-  return trimmed;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parseEnumInput = (raw: string, options: string[]): string | null => {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const normalized = trimmed.toLowerCase();
+  const match = options.find((option) => option.toLowerCase() === normalized);
+  return match ?? null;
+};
+
+const coerceSettingInput = (descriptor: ServerSettingDescriptor, raw: string): unknown => {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    throw new Error("Value required");
+  }
+  switch (descriptor.type) {
+    case "boolean": {
+      const parsed = parseBooleanInput(trimmed);
+      if (parsed == null) {
+        throw new Error("Enter a boolean value (true/false)");
+      }
+      return parsed;
+    }
+    case "integer": {
+      const parsed = parseIntegerInput(trimmed);
+      if (parsed == null) {
+        throw new Error("Enter a whole number");
+      }
+      return parsed;
+    }
+    case "enum": {
+      if (!descriptor.options || descriptor.options.length === 0) {
+        return trimmed;
+      }
+      const parsed = parseEnumInput(trimmed, descriptor.options);
+      if (!parsed) {
+        throw new Error(`Expected one of: ${descriptor.options.join(", ")}`);
+      }
+      return parsed;
+    }
+    case "string":
+    default:
+      return raw;
+  }
+};
+
+const extractSettingValue = (descriptor: ServerSettingDescriptor, payload: unknown): unknown => {
+  if (payload == null) {
+    return null;
+  }
+  if (descriptor.resultKey && typeof payload === "object" && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if (descriptor.resultKey in record) {
+      return record[descriptor.resultKey];
+    }
+  }
+  if (typeof payload === "object" && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if ("value" in record) {
+      return record.value;
+    }
+    if (descriptor.paramKey in record) {
+      return record[descriptor.paramKey];
+    }
+    if ("enabled" in record && descriptor.type === "boolean") {
+      return record.enabled;
+    }
+  }
+  return payload;
+};
+
+const normalizeSettingEntry = (descriptor: ServerSettingDescriptor, payload: unknown): SettingEntry | null => {
+  const value = extractSettingValue(descriptor, payload);
+  return {
+    id: descriptor.id,
+    label: descriptor.label,
+    value,
+    type: descriptor.type,
+    options: descriptor.options,
+  };
+};
+
+const inferRuleType = (value: unknown): string => {
+  switch (typeof value) {
+    case "boolean":
+      return "boolean";
+    case "number":
+      return Number.isInteger(value) ? "integer" : "number";
+    case "string":
+      return "string";
+    default:
+      return "string";
+  }
+};
+
+const normalizeRuleEntry = (input: unknown, fallbackKey?: string): RuleEntry | null => {
+  if (input == null && !fallbackKey) {
+    return null;
+  }
+  if (typeof input === "object" && !Array.isArray(input) && input !== null) {
+    const record = input as Record<string, unknown>;
+    const key = typeof record.key === "string" ? record.key : typeof record.name === "string" ? record.name : fallbackKey;
+    if (!key) {
+      return null;
+    }
+    const type = typeof record.type === "string" ? record.type : typeof record.value_type === "string" ? record.value_type : inferRuleType(record.value ?? record.current ?? record.state);
+    const value = record.value ?? record.current ?? record.state ?? record[key] ?? null;
+    return { key, type, value };
+  }
+  if (fallbackKey) {
+    return { key: fallbackKey, type: inferRuleType(input), value: input };
+  }
+  return null;
+};
+
+const normalizeGameRulesResponse = (payload: unknown): RuleEntry[] => {
+  const entries: RuleEntry[] = [];
+  const add = (entry: RuleEntry | null) => {
+    if (entry && entry.key) {
+      entries.push(entry);
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    payload.forEach((item) => add(normalizeRuleEntry(item)));
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.gamerules)) {
+      record.gamerules.forEach((item) => add(normalizeRuleEntry(item)));
+    } else if (record.gamerules && typeof record.gamerules === "object") {
+      Object.entries(record.gamerules as Record<string, unknown>).forEach(([key, value]) => add(normalizeRuleEntry(value, key)));
+    } else {
+      Object.entries(record).forEach(([key, value]) => add(normalizeRuleEntry(value, key)));
+    }
+  }
+
+  return entries.sort((a, b) => a.key.localeCompare(b.key));
+};
+
+const normalizePlayerEntry = (input: unknown): PlayerEntry | null => {
+  if (input == null) {
+    return null;
+  }
+  if (typeof input === "string") {
+    return { name: input };
+  }
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name : typeof record.username === "string" ? record.username : typeof record.player === "string" ? record.player : null;
+    if (!name) {
+      return null;
+    }
+    const id = typeof record.id === "string" ? record.id : typeof record.uuid === "string" ? record.uuid : undefined;
+    return { name, id };
+  }
+  return null;
+};
+
+const normalizePlayerList = (payload: unknown): PlayerEntry[] => {
+  const entries: PlayerEntry[] = [];
+  const add = (value: unknown) => {
+    const entry = normalizePlayerEntry(value);
+    if (entry) {
+      entries.push(entry);
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    payload.forEach(add);
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.players)) {
+      record.players.forEach(add);
+    } else if (Array.isArray(record.online)) {
+      record.online.forEach(add);
+    } else {
+      Object.values(record).forEach(add);
+    }
+  }
+
+  return entries.sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const normalizeAllowlistResponse = (payload: unknown): AllowlistEntry[] => {
+  const entries: AllowlistEntry[] = [];
+  const add = (value: unknown) => {
+    const entry = normalizePlayerEntry(value);
+    if (entry) {
+      entries.push(entry);
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    payload.forEach(add);
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.allowlist)) {
+      record.allowlist.forEach(add);
+    } else if (Array.isArray(record.allowed)) {
+      record.allowed.forEach(add);
+    } else {
+      Object.values(record).forEach(add);
+    }
+  }
+
+  return entries.sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const normalizeOperatorEntry = (input: unknown): OperatorEntry | null => {
+  const base = normalizePlayerEntry(input);
+  if (!base) {
+    return null;
+  }
+  if (typeof input === "object" && input !== null) {
+    const record = input as Record<string, unknown>;
+    const permissionLevel = typeof record.permission_level === "number" ? record.permission_level : typeof record.level === "number" ? record.level : typeof record.permission === "number" ? record.permission : undefined;
+    const bypassesPlayerLimit = typeof record.bypasses_player_limit === "boolean" ? record.bypasses_player_limit : typeof record.bypasses_limit === "boolean" ? record.bypasses_limit : undefined;
+    return {
+      ...base,
+      permissionLevel,
+      bypassesPlayerLimit,
+    };
+  }
+  return base;
+};
+
+const normalizeOperatorList = (payload: unknown): OperatorEntry[] => {
+  const entries: OperatorEntry[] = [];
+  const add = (value: unknown) => {
+    const entry = normalizeOperatorEntry(value);
+    if (entry) {
+      entries.push(entry);
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    payload.forEach(add);
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.operators)) {
+      record.operators.forEach(add);
+    } else {
+      Object.values(record).forEach(add);
+    }
+  }
+
+  return entries.sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const normalizeBanEntryList = (payload: unknown, type: BanType): BanEntry[] => {
+  const entries: BanEntry[] = [];
+  const add = (value: unknown) => {
+    if (value == null) {
+      return;
+    }
+    if (typeof value === "string") {
+      entries.push({ target: value, type });
+      return;
+    }
+    if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      const target =
+        typeof record.name === "string"
+          ? record.name
+          : typeof record.player === "string"
+          ? record.player
+          : typeof record.ip === "string"
+          ? record.ip
+          : typeof record.address === "string"
+          ? record.address
+          : null;
+      if (!target) {
+        return;
+      }
+      const id = typeof record.id === "string" ? record.id : typeof record.uuid === "string" ? record.uuid : undefined;
+      const reason = typeof record.reason === "string" ? record.reason : undefined;
+      const createdAt = typeof record.created_at === "string" ? record.created_at : typeof record.created === "string" ? record.created : undefined;
+      const expiresAt = typeof record.expires_at === "string" ? record.expires_at : typeof record.expires === "string" ? record.expires : undefined;
+      const source = typeof record.source === "string" ? record.source : typeof record.by === "string" ? record.by : undefined;
+      entries.push({ target, type, id, reason, createdAt, expiresAt: expiresAt ?? null, source });
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    payload.forEach(add);
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.bans)) {
+      record.bans.forEach(add);
+    } else if (Array.isArray(record.entries)) {
+      record.entries.forEach(add);
+    } else {
+      Object.values(record).forEach(add);
+    }
+  }
+
+  return entries;
+};
+
+const mergeBanResponses = (playerPayload: unknown, ipPayload: unknown): BanEntry[] => {
+  const combined = [...normalizeBanEntryList(playerPayload, "player"), ...normalizeBanEntryList(ipPayload, "ip")];
+  return combined.sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type.localeCompare(b.type);
+    }
+    return a.target.localeCompare(b.target);
+  });
 };
 
 const ServerDetailPage = () => {
@@ -96,6 +628,8 @@ const ServerDetailPage = () => {
 
   const [allowlist, setAllowlist] = useState<AllowlistEntry[]>([]);
   const [operators, setOperators] = useState<OperatorEntry[]>([]);
+  const [playersOnline, setPlayersOnline] = useState<PlayerEntry[]>([]);
+  const [bans, setBans] = useState<BanEntry[]>([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [playersLoaded, setPlayersLoaded] = useState(false);
@@ -176,10 +710,17 @@ const ServerDetailPage = () => {
     setPlayersLoading(true);
     setPlayersError(null);
     try {
-      const allowResp = await api.callServerRpc<{ allowed?: AllowlistEntry[] }>(id, "minecraft:allowlist/list", []);
-      const opsResp = await api.callServerRpc<{ operators?: OperatorEntry[] }>(id, "minecraft:operators/list", []);
-      setAllowlist(Array.isArray(allowResp?.allowed) ? allowResp.allowed : []);
-      setOperators(Array.isArray(opsResp?.operators) ? opsResp.operators : []);
+      const [playersResp, allowResp, opsResp, bansResp, ipBansResp] = await Promise.all([
+        api.callServerRpc(id, "minecraft:players", []),
+        api.callServerRpc(id, "minecraft:allowlist", []),
+        api.callServerRpc(id, "minecraft:operators", []),
+        api.callServerRpc(id, "minecraft:bans", []),
+        api.callServerRpc(id, "minecraft:ip_bans", []),
+      ]);
+      setPlayersOnline(normalizePlayerList(playersResp));
+      setAllowlist(normalizeAllowlistResponse(allowResp));
+      setOperators(normalizeOperatorList(opsResp));
+      setBans(mergeBanResponses(bansResp, ipBansResp));
     } catch (err) {
       setPlayersError((err as Error).message);
     } finally {
@@ -194,9 +735,8 @@ const ServerDetailPage = () => {
     setGameRulesLoading(true);
     setGameRulesError(null);
     try {
-      const resp = await api.callServerRpc<{ rules?: RuleEntry[] }>(id, "minecraft:gamerule/list", []);
-      const list = Array.isArray(resp?.rules) ? resp?.rules ?? [] : [];
-      setGameRules(list);
+      const resp = await api.callServerRpc(id, "minecraft:gamerules", []);
+      setGameRules(normalizeGameRulesResponse(resp));
     } catch (err) {
       setGameRulesError((err as Error).message);
     } finally {
@@ -226,17 +766,40 @@ const ServerDetailPage = () => {
     setSettingsLoading(true);
     setSettingsError(null);
     try {
-      const resp = await api.callServerRpc<{ settings?: SettingEntry[] | Record<string, unknown> }>(id, "minecraft:settings/list", []);
-      if (Array.isArray(resp?.settings)) {
-        setSettings(resp?.settings ?? []);
-      } else if (resp && resp.settings && typeof resp.settings === "object") {
-        const entries = Object.entries(resp.settings).map(([name, value]) => ({ name, value }));
-        setSettings(entries);
-      } else {
-        setSettings([]);
+      const results = await Promise.allSettled(
+        SERVER_SETTING_DESCRIPTORS.map(async (descriptor) => {
+          const payload = await api.callServerRpc(id, descriptor.getMethod, []);
+          return normalizeSettingEntry(descriptor, payload);
+        })
+      );
+
+      const entries: SettingEntry[] = [];
+      const failures: string[] = [];
+
+      results.forEach((result, index) => {
+        const descriptor = SERVER_SETTING_DESCRIPTORS[index];
+        if (result.status === "fulfilled") {
+          const entry = result.value;
+          if (entry) {
+            entries.push(entry);
+          }
+        } else {
+          const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          failures.push(`${descriptor.label}: ${reason}`);
+        }
+      });
+
+      entries.sort((a, b) => a.label.localeCompare(b.label));
+      setSettings(entries);
+      if (failures.length > 0) {
+        setSettingsError(`Some settings failed to load (${failures.length}).`);
+        if (typeof console !== "undefined" && typeof console.warn === "function") {
+          console.warn("Failed to load server settings", failures);
+        }
       }
     } catch (err) {
       setSettingsError((err as Error).message);
+      setSettings([]);
     } finally {
       setSettingsLoading(false);
     }
@@ -326,7 +889,7 @@ const ServerDetailPage = () => {
       setAuditLoaded(true);
       void fetchAuditLogs();
     }
-  }, [activeTab, auditLoaded, fetchAuditLogs, fetchGameRules, fetchPlayers, fetchSettings, gameRulesLoaded, playersLoaded, settingsLoaded]);
+  }, [activeTab, auditLoaded, fetchAuditLogs, fetchGameRulePresets, fetchGameRules, fetchPlayers, fetchSettings, gameRulePresetsLoaded, gameRulesLoaded, playersLoaded, settingsLoaded]);
 
   const handleAllowlistAdd = useCallback(async (values: Record<string, string>) => {
     const username = values.username?.trim();
@@ -378,12 +941,43 @@ const ServerDetailPage = () => {
   }, [callRpc, loadServer]);
 
   const handleGameRuleUpdate = useCallback(async (rule: RuleEntry) => {
-    const next = window.prompt(`Set value for ${rule.name}`, displayValue(rule.value));
+    const defaultValue = displayValue(rule.value);
+    const next = window.prompt(`Set value for ${rule.key} (${rule.type})`, defaultValue);
     if (next == null) {
       return;
     }
+    const trimmed = next.trim();
+    if (trimmed === "") {
+      window.alert("Value required");
+      return;
+    }
+
+    let payloadValue: string = trimmed;
+    if (rule.type === "boolean") {
+      const parsed = parseBooleanInput(trimmed);
+      if (parsed == null) {
+        window.alert("Enter true or false");
+        return;
+      }
+      payloadValue = parsed ? "true" : "false";
+    } else if (rule.type === "integer") {
+      const parsed = parseIntegerInput(trimmed);
+      if (parsed == null) {
+        window.alert("Enter a whole number");
+        return;
+      }
+      payloadValue = String(parsed);
+    } else if (rule.type === "number") {
+      const parsed = Number(trimmed);
+      if (Number.isNaN(parsed)) {
+        window.alert("Enter a numeric value");
+        return;
+      }
+      payloadValue = String(parsed);
+    }
+
     try {
-      await callRpc("minecraft:gamerule/set", [rule.name, coerceInputValue(next, rule.value)]);
+      await callRpc("minecraft:gamerules/update", { gamerule: { key: rule.key, value: payloadValue } });
       await fetchGameRules();
     } catch (err) {
       window.alert((err as Error).message);
@@ -391,12 +985,20 @@ const ServerDetailPage = () => {
   }, [callRpc, fetchGameRules]);
 
   const handleSettingUpdate = useCallback(async (setting: SettingEntry) => {
-    const next = window.prompt(`Set value for ${setting.name}`, displayValue(setting.value));
+    const descriptor = SERVER_SETTING_LOOKUP.get(setting.id);
+    if (!descriptor) {
+      window.alert("Unable to update this setting through the UI yet.");
+      return;
+    }
+    const optionHint = descriptor.options && descriptor.options.length > 0 ? ` (options: ${descriptor.options.join(", ")})` : "";
+    const defaultValue = displayValue(setting.value);
+    const next = window.prompt(`Set value for ${descriptor.label}${optionHint}`, defaultValue);
     if (next == null) {
       return;
     }
     try {
-      await callRpc("minecraft:settings/set", [setting.name, coerceInputValue(next, setting.value)]);
+      const coerced = coerceSettingInput(descriptor, next);
+      await callRpc(descriptor.setMethod, { [descriptor.paramKey]: coerced });
       await fetchSettings();
     } catch (err) {
       window.alert((err as Error).message);
@@ -434,6 +1036,23 @@ const ServerDetailPage = () => {
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Current players</h3>
+          {playersLoading && playersOnline.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">Loading players…</p>
+          ) : playersOnline.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">No players are currently online.</p>
+          ) : (
+            <ul className="mt-4 space-y-2 text-sm text-slate-100">
+              {playersOnline.map((player) => (
+                <li key={player.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
+                  <span>{player.name}</span>
+                  {player.id ? <span className="text-xs text-slate-500">{player.id}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Allowlist</h3>
           {playersLoading && allowlist.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">Loading allowlist…</p>
@@ -444,7 +1063,7 @@ const ServerDetailPage = () => {
               {allowlist.map((item) => (
                 <li key={item.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
                   <span>{item.name}</span>
-                  {item.uuid ? <span className="text-xs text-slate-500">{item.uuid}</span> : null}
+                  {item.id ? <span className="text-xs text-slate-500">{item.id}</span> : null}
                 </li>
               ))}
             </ul>
@@ -458,12 +1077,53 @@ const ServerDetailPage = () => {
             <p className="mt-4 text-sm text-slate-400">No operators configured.</p>
           ) : (
             <ul className="mt-4 space-y-2 text-sm text-slate-100">
-              {operators.map((item) => (
-                <li key={item.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
-                  <span>{item.name}</span>
-                  {item.permission ? <span className="text-xs text-slate-500">{item.permission}</span> : null}
-                </li>
-              ))}
+              {operators.map((operator) => {
+                const badges: string[] = [];
+                if (operator.permissionLevel != null) {
+                  badges.push(`Level ${operator.permissionLevel}`);
+                }
+                if (operator.bypassesPlayerLimit) {
+                  badges.push("Bypasses limit");
+                }
+                return (
+                  <li key={operator.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
+                    <span>{operator.name}</span>
+                    {badges.length > 0 ? <span className="text-xs text-slate-500">{badges.join(" · ")}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Bans & IP bans</h3>
+          {playersLoading && bans.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">Loading bans…</p>
+          ) : bans.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">No bans recorded.</p>
+          ) : (
+            <ul className="mt-4 space-y-2 text-sm text-slate-100">
+              {bans.map((ban, idx) => {
+                const details: string[] = [];
+                if (ban.reason) {
+                  details.push(ban.reason);
+                }
+                if (ban.expiresAt) {
+                  details.push(`Expires ${formatTimestamp(ban.expiresAt)}`);
+                }
+                if (ban.source) {
+                  details.push(`By ${ban.source}`);
+                }
+                return (
+                  <li key={`${ban.type}-${ban.target}-${ban.id ?? idx}`} className="space-y-1 rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{ban.target}</span>
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">{ban.type === "player" ? "Player" : "IP"}</span>
+                    </div>
+                    {details.length > 0 ? <p className="text-xs text-slate-400">{details.join(" · ")}</p> : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -674,8 +1334,13 @@ const ServerDetailPage = () => {
               </tr>
             ) : (
               gameRules.map((rule) => (
-                <tr key={rule.name}>
-                  <td className="px-4 py-3 font-medium text-slate-100">{rule.name}</td>
+                <tr key={rule.key}>
+                  <td className="px-4 py-3 font-medium text-slate-100">
+                    <div className="flex flex-col">
+                      <span>{rule.key}</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500">{rule.type}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-200">{displayValue(rule.value)}</td>
                   <td className="px-4 py-3 text-right">
                     <button
@@ -738,8 +1403,13 @@ const ServerDetailPage = () => {
               </tr>
             ) : (
               settings.map((setting) => (
-                <tr key={setting.name}>
-                  <td className="px-4 py-3 font-medium text-slate-100">{setting.name}</td>
+                <tr key={setting.id}>
+                  <td className="px-4 py-3 font-medium text-slate-100">
+                    <div className="flex flex-col">
+                      <span>{setting.label}</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500">{setting.type}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-200">{displayValue(setting.value)}</td>
                   <td className="px-4 py-3 text-right">
                     <button
