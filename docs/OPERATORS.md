@@ -197,7 +197,88 @@ Example agent log excerpt:
 
 ---
 
-## 11. Security Considerations
+## 11. Configure TLS for the Minecraft Management API
+
+Follow these steps to serve the Minecraft management endpoint over TLS with a custom certificate and secured password handling.
+
+1. **Create or import a certificate**
+    * To generate a self-signed certificate for testing:
+
+       ```bash
+       keytool -genkeypair \
+          -alias mc-mgmt \
+          -keyalg RSA \
+          -keysize 4096 \
+          -validity 825 \
+          -storetype PKCS12 \
+          -keystore /opt/minecraft/ssl/mc-mgmt.p12 \
+          -storepass "$(openssl rand -base64 24)"
+       ```
+
+    * To import an issued certificate (PEM key/cert chain):
+
+       ```bash
+       openssl pkcs12 -export \
+          -inkey privkey.pem \
+          -in fullchain.pem \
+          -name mc-mgmt \
+          -out /opt/minecraft/ssl/mc-mgmt.p12
+       ```
+
+2. **Lock down filesystem permissions**
+    * Store the `.p12` file somewhere only the `minecraft` service account can read (e.g. `/opt/minecraft/ssl/`).
+    * Apply restrictive permissions:
+
+       ```bash
+       chown minecraft:minecraft /opt/minecraft/ssl/mc-mgmt.p12
+       chmod 600 /opt/minecraft/ssl/mc-mgmt.p12
+       ```
+
+3. **Expose the keystore to the server**
+    * Add or update the TLS fields in `server.properties`:
+
+       ```properties
+       management-server-tls-enabled=true
+       management-server-tls-keystore=/opt/minecraft/ssl/mc-mgmt.p12
+       management-server-tls-keystore-password=${env:MC_TLS_KEYSTORE_PASSWORD}
+       ```
+
+    * The `${env:VAR}` syntax ships with 1.20.5+; if your version does not support interpolation, omit the third line and set the password via JVM options instead (next step).
+
+4. **Provide the password at runtime**
+    * Export the password before starting the server (systemd unit, shell profile, or `.env` file read by your launcher):
+
+       ```bash
+       export MC_TLS_KEYSTORE_PASSWORD="super-secret-passphrase"
+       ```
+
+    * If environment substitution is unavailable, pass the password as a JVM property. Append to `user_jvm_args.txt` or the launch command:
+
+       ```text
+       -Dmanagement-server.tls.keystore.password=${MC_TLS_KEYSTORE_PASSWORD}
+       ```
+
+       With the property set, the `server.properties` entry `management-server-tls-keystore-password` can be left blank.
+
+5. **Restart and verify**
+    * Restart the Minecraft server and confirm it logs `Management server listening on https://...`.
+    * From the Conduit agent host, you can run:
+
+       ```bash
+       openssl s_client -connect 127.0.0.1:24464 -servername minecraft.local </dev/null
+       ```
+
+       Ensure the certificate chain matches the keystore you configured.
+
+6. **Update the Conduit agent**
+    * Set `MC_MGMT_WS` to the `wss://` endpoint and, if using a private CA, point `MC_TLS_ROOT_CA` at the PEM bundle that contains the issuing certificate.
+    * Leave `MC_TLS_MODE` at `strict` for production. Only use `skip` or `MC_TLS_INSECURE=true` while testing self-signed certs.
+
+> **Tip:** Rotate the keystore password periodically and update any systemd secrets or environment files in lockstep. Recycle the Minecraft management process after each rotation.
+
+---
+
+## 12. Security Considerations
 
 * **TLS validation** — production deployments should keep TLS verification enabled (`MC_TLS_MODE=strict`) and, when using private PKI, load custom roots via `MC_TLS_ROOT_CA`. Reserve `MC_TLS_MODE=skip` (or `MC_TLS_INSECURE=true`) for isolated development only.
 * **Certificate pinning** — supply `MC_TLS_SERVER_NAME` when connecting via IP addresses to avoid relying on default SNI detection.
@@ -206,7 +287,7 @@ Example agent log excerpt:
 
 ---
 
-## 12. Upgrade Notes
+## 13. Upgrade Notes
 
 * Agents must be restarted to pick up the new telemetry and backoff knobs. Existing env files remain compatible; new fields are optional with safe defaults.
 * The UI now surfaces bulk game rule presets. Moderators should review preset definitions in the API if customising before applying in production.
@@ -214,7 +295,7 @@ Example agent log excerpt:
 
 ---
 
-## 13. Support & Feedback
+## 14. Support & Feedback
 
 * File issues in the repository.
 * Share diagnostic logs (`--json` output from services) for deeper investigations.
