@@ -114,7 +114,7 @@ The API prevents bootstrap once a user exists, returning HTTP 403 if attempted a
    export CONDUIT_AGENT_TOKEN="<token from UI>"
    export MC_MGMT_WS="wss://127.0.0.1:24464"
    export MC_MGMT_TOKEN="<minecraft management token>"
-   export MC_TLS_INSECURE="true"   # dev only
+   export MC_TLS_MODE="skip"   # dev only
    ```
 
 4. Start the agent binary (see `agents/mc-agent`). The agent will:
@@ -151,7 +151,7 @@ RBAC guardrails:
 | UI shows "Agent not connected" | Agent WebSocket not connected | Verify `CONDUIT_AGENT_TOKEN`, API URL, and network reachability |
 | `rpc.discover` missing schema | Agent unable to reach Minecraft | Check `MC_MGMT_WS`, TLS settings, and management server logs |
 | Login fails after bootstrapping | JWT secret changed or session expired | Clear browser storage and re-login; ensure `JWT_SECRET` remains stable |
-| WebSocket fails with TLS error | Self-signed cert without `MC_TLS_INSECURE` | Set `MC_TLS_INSECURE=true` for dev or install a trusted cert |
+| WebSocket fails with TLS error | Self-signed cert without trusted root | Set `MC_TLS_MODE=skip` for dev or install a trusted cert/CA bundle |
 
 ---
 
@@ -272,7 +272,7 @@ Follow these steps to serve the Minecraft management endpoint over TLS with a cu
 
 6. **Update the Conduit agent**
     * Set `MC_MGMT_WS` to the `wss://` endpoint and, if using a private CA, point `MC_TLS_ROOT_CA` at the PEM bundle that contains the issuing certificate.
-    * Leave `MC_TLS_MODE` at `strict` for production. Only use `skip` or `MC_TLS_INSECURE=true` while testing self-signed certs.
+   * Leave `MC_TLS_MODE` at `strict` for production. Only use `MC_TLS_MODE=skip` while testing self-signed certs (the legacy `MC_TLS_INSECURE` flag is still honored but should be avoided).
 
 > **Tip:** Rotate the keystore password periodically and update any systemd secrets or environment files in lockstep. Recycle the Minecraft management process after each rotation.
 
@@ -280,7 +280,7 @@ Follow these steps to serve the Minecraft management endpoint over TLS with a cu
 
 ## 12. Security Considerations
 
-* **TLS validation** — production deployments should keep TLS verification enabled (`MC_TLS_MODE=strict`) and, when using private PKI, load custom roots via `MC_TLS_ROOT_CA`. Reserve `MC_TLS_MODE=skip` (or `MC_TLS_INSECURE=true`) for isolated development only.
+* **TLS validation** — production deployments should keep TLS verification enabled (`MC_TLS_MODE=strict`) and, when using private PKI, load custom roots via `MC_TLS_ROOT_CA`. Reserve `MC_TLS_MODE=skip` for isolated development only (the legacy `MC_TLS_INSECURE` flag remains for backwards compatibility but is no longer recommended).
 * **Certificate pinning** — supply `MC_TLS_SERVER_NAME` when connecting via IP addresses to avoid relying on default SNI detection.
 * **Secrets management** — store `CONDUIT_AGENT_TOKEN` and `MC_MGMT_TOKEN` in a secret manager and inject via environment instead of committing to disk.
 * **Audit exports** — the UI’s CSV download reflects the server-side export endpoint and includes all moderation actions. Rotate exports into your compliance archive periodically.

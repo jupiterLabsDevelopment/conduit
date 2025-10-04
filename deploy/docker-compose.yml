@@ -59,7 +59,7 @@ services:
       CONDUIT_AGENT_TOKEN: ${CONDUIT_AGENT_TOKEN:-replace-with-token}
       MC_MGMT_WS: ${MC_MGMT_WS:-ws://host.docker.internal:24464}
       MC_MGMT_TOKEN: ${MC_MGMT_TOKEN:-replace-with-management-token}
-      MC_TLS_INSECURE: ${MC_TLS_INSECURE:-true}
+      MC_TLS_MODE: ${MC_TLS_MODE:-skip}
 
 volumes:
   conduit-db-data:
