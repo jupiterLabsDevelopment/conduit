@@ -73,7 +73,7 @@ cd apps/ui && npm install && npm run build
 cd packages/sdk-ts && npm install && npm run build
 ```
 
-Run database migrations from `deploy/migrations` using your preferred tool (e.g. `golang-migrate`).
+Run the bootstrap script `deploy/migrations/init_db.sql` against a fresh Postgres instance (for example: `psql -f deploy/migrations/init_db.sql postgres://conduit:conduit@localhost:5432/postgres`).
 
 ## Usage
 

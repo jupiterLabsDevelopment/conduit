@@ -157,7 +157,7 @@ RBAC guardrails:
 
 ## 9. Manual Deployment (Without Compose)
 
-1. **Postgres** — create `conduit` database and run migrations under `deploy/migrations` (e.g. via `golang-migrate`).
+1. **Postgres** — create the `conduit` database and apply `deploy/migrations/init_db.sql` (e.g. `psql -f deploy/migrations/init_db.sql postgres://conduit:conduit@localhost:5432/postgres`). The script is idempotent for empty clusters; drop/recreate the database to rerun.
 2. **API** — build `apps/api/cmd/api` binary, configure env vars, and run behind HTTPS.
 3. **UI** — `npm install && npm run build` in `apps/ui`, then serve `dist/` via CDN or reverse proxy.
 4. **Agent** — build `agents/mc-agent` and deploy alongside the Minecraft server.

@@ -10,25 +10,22 @@ services:
       POSTGRES_PASSWORD: conduit
     volumes:
       - conduit-db-data:/var/lib/postgresql/data
+      - ./migrations/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conduit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     ports:
       - "5432:5432"
-
-  migrate:
-    image: migrate/migrate:v4.17.1
-    depends_on:
-      - db
-    volumes:
-      - ./migrations:/migrations:ro
-    entrypoint: ["migrate", "-path", "/migrations", "-database", "postgres://conduit:conduit@db:5432/conduit?sslmode=disable", "up"]
-    restart: "no"
 
   api:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     environment:
       PG_DSN: postgres://conduit:conduit@db:5432/conduit?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
