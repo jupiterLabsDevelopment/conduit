@@ -12,11 +12,11 @@ This guide walks through bootstrapping the Conduit MVP stack, connecting a Minec
 [ Browser UI ] ⇄ HTTPS ⇄ [ Conduit API ] ⇄ WS ⇄ [ Agent ] ⇄ WS ⇄ [ Minecraft Management API ]
                                             │
                                             └── Postgres
+```
 
 * **Conduit API** — Go service that handles REST, WebSocket fanout, RBAC, and audit logging.
 * **Admin UI** — React SPA for issuing commands and viewing live events.
 * **Postgres** — Persistence for users, servers, sessions, audit logs, and cached schema.
-```
 
 ---
 
