@@ -297,7 +297,8 @@ export class ConduitClient {
       headers.set("Authorization", `Bearer ${this.token}`);
     }
 
-    return this.fetchImpl(`${this.apiBase}${path}`, {
+    const fetchImpl = this.fetchImpl;
+    return fetchImpl(`${this.apiBase}${path}`, {
       ...init,
       headers
     });
