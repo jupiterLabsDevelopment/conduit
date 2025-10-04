@@ -22,7 +22,7 @@ const ApiKeysPage = () => {
     setError(null);
     try {
       const list = await api.listApiKeys();
-      setKeys(list);
+      setKeys(Array.isArray(list) ? list : []);
     } catch (err) {
       setError((err as Error).message);
     } finally {

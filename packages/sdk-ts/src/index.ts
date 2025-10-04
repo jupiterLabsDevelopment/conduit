@@ -105,14 +105,25 @@ export interface WebSocketLike {
   removeEventListener?: (type: string, listener: (...args: any[]) => void) => void;
 }
 
-const deriveWsBase = (httpBase: string): string => {
-  if (httpBase.startsWith("http://")) {
-    return `ws://${httpBase.slice("http://".length)}`;
+const DEFAULT_HTTP_BASE = "http://localhost:8080";
+
+const normalizeBase = (input?: string | null): string => {
+  const trimmed = input?.trim();
+  if (!trimmed) {
+    return DEFAULT_HTTP_BASE;
   }
-  if (httpBase.startsWith("https://")) {
-    return `wss://${httpBase.slice("https://".length)}`;
+  return trimmed;
+};
+
+const deriveWsBase = (httpBase?: string | null): string => {
+  const base = normalizeBase(httpBase);
+  if (base.startsWith("http://")) {
+    return `ws://${base.slice("http://".length)}`;
   }
-  return httpBase;
+  if (base.startsWith("https://")) {
+    return `wss://${base.slice("https://".length)}`;
+  }
+  return base;
 };
 
 const resolveFetch = (custom?: typeof fetch): typeof fetch => {
@@ -144,7 +155,7 @@ export class ConduitClient {
   private readonly WebSocketImpl: WebSocketConstructor;
 
   constructor(options: ConduitClientOptions = {}) {
-    const apiBase = (options.apiBase ?? "http://localhost:8080").replace(/\/$/, "");
+    const apiBase = normalizeBase(options.apiBase).replace(/\/$/, "");
     this.apiBase = apiBase;
     this.wsBase = (options.wsBase ?? deriveWsBase(apiBase)).replace(/\/$/, "");
     this.token = options.token ?? null;

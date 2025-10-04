@@ -14,18 +14,30 @@ import {
   type ServerListItem,
 } from "@conduit/sdk";
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8080";
-const API_WS_BASE = (import.meta.env.VITE_API_WS as string | undefined) ?? deriveWsBase(API_BASE);
+const DEFAULT_HTTP_BASE = "http://localhost:8080";
 
-function deriveWsBase(httpBase: string): string {
-  if (httpBase.startsWith("http://")) {
-    return `ws://${httpBase.slice("http://".length)}`;
+const normalizeHttpBase = (input?: string | null): string => {
+  const trimmed = input?.trim();
+  if (!trimmed) {
+    return DEFAULT_HTTP_BASE;
   }
-  if (httpBase.startsWith("https://")) {
-    return `wss://${httpBase.slice("https://".length)}`;
+  return trimmed;
+};
+
+function deriveWsBase(httpBase?: string | null): string {
+  const base = normalizeHttpBase(httpBase);
+  if (base.startsWith("http://")) {
+    return `ws://${base.slice("http://".length)}`;
   }
-  return httpBase;
+  if (base.startsWith("https://")) {
+    return `wss://${base.slice("https://".length)}`;
+  }
+  return base;
 }
+
+const API_BASE = normalizeHttpBase(import.meta.env.VITE_API_BASE as string | undefined);
+const explicitWsBase = (import.meta.env.VITE_API_WS as string | undefined)?.trim();
+const API_WS_BASE = explicitWsBase && explicitWsBase.length > 0 ? explicitWsBase : deriveWsBase(API_BASE);
 
 export type {
   ApiKeySummary,
