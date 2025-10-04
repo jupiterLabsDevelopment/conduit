@@ -1,0 +1,22 @@
+{
+  "name": "@conduit/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+  "build": "tsup src/index.ts --format esm --dts",
+    "lint": "eslint src --ext .ts",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "isomorphic-ws": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12",
+    "eslint": "^8.57.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.4"
+  }
+}

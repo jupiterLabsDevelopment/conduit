@@ -1,0 +1,17 @@
+# Go
+bin/
+*.log
+
+# Node
+node_modules/
+*.tsbuildinfo
+apps/ui/dist/
+packages/sdk-ts/dist/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+**/.env

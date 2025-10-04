@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: conduit
+      POSTGRES_USER: conduit
+      POSTGRES_PASSWORD: conduit
+    volumes:
+      - conduit-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      - db
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["migrate", "-path", "/migrations", "-database", "postgres://conduit:conduit@db:5432/conduit?sslmode=disable", "up"]
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PG_DSN: postgres://conduit:conduit@db:5432/conduit?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      PORT: 8080
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: ..
+      dockerfile: apps/ui/Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080}
+        VITE_API_WS: ${VITE_API_WS:-ws://localhost:8080}
+    depends_on:
+      - api
+    environment:
+      LISTEN_PORT: 4173
+    ports:
+      - "5173:4173"
+
+  agent:
+    build:
+      context: ..
+      dockerfile: agents/mc-agent/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      CONDUIT_API_WS: ${CONDUIT_API_WS:-ws://api:8080/agent/connect}
+      CONDUIT_AGENT_TOKEN: ${CONDUIT_AGENT_TOKEN:-replace-with-token}
+      MC_MGMT_WS: ${MC_MGMT_WS:-ws://host.docker.internal:24464}
+      MC_MGMT_TOKEN: ${MC_MGMT_TOKEN:-replace-with-management-token}
+      MC_TLS_INSECURE: ${MC_TLS_INSECURE:-true}
+
+volumes:
+  conduit-db-data:
