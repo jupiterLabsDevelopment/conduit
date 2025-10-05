@@ -1,9 +1,18 @@
-# Conduit · Secure control channel for Minecraft servers
+<div align="center">
+  <a href="https://github.com/jupiterLabsDevelopment/Conduit">
+    <img src="https://static.wikia.nocookie.net/minecraft_gamepedia/images/a/a8/Conduit_BE1.gif" alt="Logo" width="160" height="160">
+  </a>
+
+<h3 align="center">Conduit</h3>
+<p align="center">
+   Secure control channel for Minecraft servers
+</p>
 
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
+</div>
 
 ## Description
 
