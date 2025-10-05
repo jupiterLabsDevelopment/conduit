@@ -250,9 +250,218 @@ const SERVER_SETTING_DESCRIPTORS: ServerSettingDescriptor[] = [
   },
 ];
 
-const SERVER_SETTING_LOOKUP = new Map<string, ServerSettingDescriptor>(
+const STATIC_SERVER_SETTING_LOOKUP = new Map<string, ServerSettingDescriptor>(
   SERVER_SETTING_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor])
 );
+
+interface OpenRPCSchema {
+  type?: string;
+  title?: string;
+  description?: string;
+  enum?: unknown[];
+  properties?: Record<string, OpenRPCSchema>;
+  items?: OpenRPCSchema;
+  anyOf?: OpenRPCSchema[];
+  oneOf?: OpenRPCSchema[];
+  allOf?: OpenRPCSchema[];
+  $ref?: string;
+}
+
+interface OpenRPCParam {
+  name?: string;
+  schema?: OpenRPCSchema;
+}
+
+interface OpenRPCResult {
+  name?: string;
+  schema?: OpenRPCSchema;
+}
+
+interface OpenRPCMethod {
+  name?: string;
+  params?: OpenRPCParam[];
+  result?: OpenRPCResult;
+}
+
+interface OpenRPCDocument {
+  methods?: OpenRPCMethod[];
+}
+
+const unwrapCompositeSchema = (schema?: OpenRPCSchema): OpenRPCSchema | undefined => {
+  if (!schema) {
+    return undefined;
+  }
+  if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+    return unwrapCompositeSchema(schema.anyOf[0]);
+  }
+  if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+    return unwrapCompositeSchema(schema.oneOf[0]);
+  }
+  if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+    return unwrapCompositeSchema(schema.allOf[0]);
+  }
+  return schema;
+};
+
+const inferSettingType = (schema?: OpenRPCSchema): { type: ServerSettingType; options?: string[] } => {
+  const resolved = unwrapCompositeSchema(schema);
+  if (!resolved) {
+    return { type: "string" };
+  }
+  if (Array.isArray(resolved.enum) && resolved.enum.length > 0) {
+    return { type: "enum", options: resolved.enum.map((value) => String(value)) };
+  }
+  if (resolved.type === "boolean") {
+    return { type: "boolean" };
+  }
+  if (resolved.type === "integer" || resolved.type === "number") {
+    return { type: "integer" };
+  }
+  return { type: "string" };
+};
+
+const inferParamInfo = (
+  method: OpenRPCMethod
+): { paramKey: string; type: ServerSettingType; options?: string[] } | null => {
+  const params = Array.isArray(method?.params) ? method.params : [];
+  if (params.length === 0) {
+    return null;
+  }
+  const param = params[0];
+  const schema = unwrapCompositeSchema(param?.schema);
+
+  if (schema && schema.type === "object" && schema.properties) {
+    const keys = Object.keys(schema.properties);
+    if (keys.length === 1) {
+      const key = keys[0];
+      const { type, options } = inferSettingType(schema.properties[key]);
+      return { paramKey: key, type, options };
+    }
+    if (param?.name && schema.properties[param.name]) {
+      const { type, options } = inferSettingType(schema.properties[param.name]);
+      return { paramKey: param.name, type, options };
+    }
+  }
+
+  const key = param?.name ?? "value";
+  const { type, options } = inferSettingType(schema ?? param?.schema);
+  return { paramKey: key, type, options };
+};
+
+const inferResultKey = (method: OpenRPCMethod, fallbackParam: string | undefined): string | undefined => {
+  const schema = unwrapCompositeSchema(method?.result?.schema);
+  if (!schema) {
+    return undefined;
+  }
+  if (schema.type === "object" && schema.properties) {
+    const keys = Object.keys(schema.properties);
+    if (keys.length === 1) {
+      return keys[0];
+    }
+    if (fallbackParam && schema.properties[fallbackParam]) {
+      return fallbackParam;
+    }
+    if (schema.properties.value) {
+      return "value";
+    }
+    if (schema.properties.enabled) {
+      return "enabled";
+    }
+  }
+  return undefined;
+};
+
+const createSettingLabel = (id: string, method: OpenRPCMethod): string => {
+  const title = unwrapCompositeSchema(method?.result?.schema)?.title;
+  if (title && typeof title === "string") {
+    return title;
+  }
+  return id
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
+const inferServerSettingDescriptorsFromSchema = (schemaDoc: unknown): ServerSettingDescriptor[] => {
+  if (!schemaDoc || typeof schemaDoc !== "object") {
+    return [];
+  }
+
+  const document = schemaDoc as OpenRPCDocument;
+  const methods = Array.isArray(document.methods) ? document.methods : [];
+  const methodMap = new Map<string, OpenRPCMethod>();
+
+  methods.forEach((method) => {
+    if (method && typeof method.name === "string") {
+      methodMap.set(method.name, method);
+    }
+  });
+
+  const descriptors: ServerSettingDescriptor[] = [];
+
+  methodMap.forEach((getter, name) => {
+    if (!name.startsWith("minecraft:serversettings/") || name.endsWith("/set")) {
+      return;
+    }
+
+    const id = name.split("/").pop();
+    if (!id) {
+      return;
+    }
+
+    const setterName = `${name}/set`;
+    const setter = methodMap.get(setterName);
+    if (!setter) {
+      return;
+    }
+
+    const paramInfo = inferParamInfo(setter);
+    if (!paramInfo) {
+      return;
+    }
+
+    const resultKey = inferResultKey(getter, paramInfo.paramKey);
+    const label = createSettingLabel(id, getter);
+    const descriptor: ServerSettingDescriptor = {
+      id,
+      label,
+      getMethod: name,
+      setMethod: setterName,
+      paramKey: paramInfo.paramKey,
+      type: paramInfo.type,
+    };
+    if (resultKey) {
+      descriptor.resultKey = resultKey;
+    }
+    if (paramInfo.options && paramInfo.options.length > 0) {
+      descriptor.options = paramInfo.options;
+    }
+    descriptors.push(descriptor);
+  });
+
+  return descriptors;
+};
+
+const parseNameList = (raw: string, limit = 100): string[] => {
+  const tokens = raw
+    .split(/[\r\n,;]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+
+  const deduped: string[] = [];
+  for (const token of tokens) {
+    if (!deduped.includes(token)) {
+      deduped.push(token);
+      if (deduped.length >= limit) {
+        break;
+      }
+    }
+  }
+  return deduped;
+};
+
+type RejectedPromiseResult = Extract<PromiseSettledResult<unknown>, { status: "rejected" }>;
+
 
 const tabs: Array<{ id: TabKey; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -665,6 +874,29 @@ const ServerDetailPage = () => {
   const selectedPreset = useMemo(() => gameRulePresets.find((preset) => preset.key === selectedPresetKey) ?? null, [gameRulePresets, selectedPresetKey]);
   const presetResults: PresetApplicationResult[] = presetApplyResult?.results ?? [];
 
+  const schemaSettingDescriptors = useMemo(() => {
+    const inferred = inferServerSettingDescriptorsFromSchema(schema);
+    return inferred.filter((descriptor) => !STATIC_SERVER_SETTING_LOOKUP.has(descriptor.id));
+  }, [schema]);
+
+  const resolvedSettingDescriptors = useMemo(() => {
+    const map = new Map<string, ServerSettingDescriptor>(STATIC_SERVER_SETTING_LOOKUP);
+    schemaSettingDescriptors.forEach((descriptor) => {
+      if (!map.has(descriptor.id)) {
+        map.set(descriptor.id, descriptor);
+      }
+    });
+    return Array.from(map.values());
+  }, [schemaSettingDescriptors]);
+
+  const settingDescriptorLookup = useMemo(() => {
+    const map = new Map<string, ServerSettingDescriptor>();
+    resolvedSettingDescriptors.forEach((descriptor) => {
+      map.set(descriptor.id, descriptor);
+    });
+    return map;
+  }, [resolvedSettingDescriptors]);
+
   const loadServer = useCallback(async () => {
     if (!id) {
       return;
@@ -765,9 +997,10 @@ const ServerDetailPage = () => {
     }
     setSettingsLoading(true);
     setSettingsError(null);
+    const descriptors = resolvedSettingDescriptors;
     try {
       const results = await Promise.allSettled(
-        SERVER_SETTING_DESCRIPTORS.map(async (descriptor) => {
+        descriptors.map(async (descriptor) => {
           const payload = await api.callServerRpc(id, descriptor.getMethod, []);
           return normalizeSettingEntry(descriptor, payload);
         })
@@ -777,7 +1010,7 @@ const ServerDetailPage = () => {
       const failures: string[] = [];
 
       results.forEach((result, index) => {
-        const descriptor = SERVER_SETTING_DESCRIPTORS[index];
+        const descriptor = descriptors[index];
         if (result.status === "fulfilled") {
           const entry = result.value;
           if (entry) {
@@ -803,7 +1036,7 @@ const ServerDetailPage = () => {
     } finally {
       setSettingsLoading(false);
     }
-  }, [api, id]);
+  }, [api, id, resolvedSettingDescriptors]);
 
   const fetchAuditLogs = useCallback(async () => {
     if (!id) {
@@ -891,41 +1124,78 @@ const ServerDetailPage = () => {
     }
   }, [activeTab, auditLoaded, fetchAuditLogs, fetchGameRulePresets, fetchGameRules, fetchPlayers, fetchSettings, gameRulePresetsLoaded, gameRulesLoaded, playersLoaded, settingsLoaded]);
 
+  const executeBulkPlayerAction = useCallback(
+    async (names: string[], method: string) => {
+      if (names.length === 0) {
+        throw new Error("Enter at least one player username");
+      }
+      const outcomes = await Promise.allSettled(
+        names.map((name) => callRpc(method, [[{ name }]]))
+      );
+      const failures = outcomes.filter((result): result is RejectedPromiseResult => result.status === "rejected");
+      if (failures.length > 0) {
+        const messages = failures
+          .map((failure) => (failure.reason instanceof Error ? failure.reason.message : String(failure.reason)))
+          .filter((msg) => msg && msg.trim().length > 0);
+        const primary = messages[0] ?? "Request failed";
+        if (failures.length === names.length) {
+          throw new Error(primary);
+        }
+        throw new Error(`${failures.length} of ${names.length} updates failed${primary ? ` (${primary})` : ""}`);
+      }
+    },
+    [callRpc]
+  );
+
   const handleAllowlistAdd = useCallback(async (values: Record<string, string>) => {
-    const username = values.username?.trim();
-    if (!username) {
-      throw new Error("Player username required");
-    }
-    await callRpc("minecraft:allowlist/add", [[{ name: username }]]);
+    const usernames = parseNameList(values.username ?? "");
+    await executeBulkPlayerAction(usernames, "minecraft:allowlist/add");
     await fetchPlayers();
-  }, [callRpc, fetchPlayers]);
+  }, [executeBulkPlayerAction, fetchPlayers]);
 
   const handleAllowlistRemove = useCallback(async (values: Record<string, string>) => {
-    const username = values.username?.trim();
-    if (!username) {
-      throw new Error("Player username required");
-    }
-    await callRpc("minecraft:allowlist/remove", [[{ name: username }]]);
+    const usernames = parseNameList(values.username ?? "");
+    await executeBulkPlayerAction(usernames, "minecraft:allowlist/remove");
     await fetchPlayers();
-  }, [callRpc, fetchPlayers]);
+  }, [executeBulkPlayerAction, fetchPlayers]);
 
   const handleOperatorAdd = useCallback(async (values: Record<string, string>) => {
-    const username = values.username?.trim();
-    if (!username) {
-      throw new Error("Player username required");
-    }
-    await callRpc("minecraft:operators/add", [[{ name: username }]]);
+    const usernames = parseNameList(values.username ?? "");
+    await executeBulkPlayerAction(usernames, "minecraft:operators/add");
     await fetchPlayers();
-  }, [callRpc, fetchPlayers]);
+  }, [executeBulkPlayerAction, fetchPlayers]);
 
   const handleOperatorRemove = useCallback(async (values: Record<string, string>) => {
-    const username = values.username?.trim();
-    if (!username) {
-      throw new Error("Player username required");
-    }
-    await callRpc("minecraft:operators/remove", [[{ name: username }]]);
+    const usernames = parseNameList(values.username ?? "");
+    await executeBulkPlayerAction(usernames, "minecraft:operators/remove");
     await fetchPlayers();
-  }, [callRpc, fetchPlayers]);
+  }, [executeBulkPlayerAction, fetchPlayers]);
+
+  const handleAllowlistEntryRemove = useCallback(async (name: string) => {
+    if (!name) {
+      return;
+    }
+    setPlayersError(null);
+    try {
+      await executeBulkPlayerAction([name], "minecraft:allowlist/remove");
+      await fetchPlayers();
+    } catch (err) {
+      setPlayersError((err as Error).message);
+    }
+  }, [executeBulkPlayerAction, fetchPlayers]);
+
+  const handleOperatorEntryRemove = useCallback(async (name: string) => {
+    if (!name) {
+      return;
+    }
+    setPlayersError(null);
+    try {
+      await executeBulkPlayerAction([name], "minecraft:operators/remove");
+      await fetchPlayers();
+    } catch (err) {
+      setPlayersError((err as Error).message);
+    }
+  }, [executeBulkPlayerAction, fetchPlayers]);
 
   const handleServerSave = useCallback(async () => {
     await callRpc("minecraft:server/save", []);
@@ -985,7 +1255,7 @@ const ServerDetailPage = () => {
   }, [callRpc, fetchGameRules]);
 
   const handleSettingUpdate = useCallback(async (setting: SettingEntry) => {
-    const descriptor = SERVER_SETTING_LOOKUP.get(setting.id);
+    const descriptor = settingDescriptorLookup.get(setting.id);
     if (!descriptor) {
       window.alert("Unable to update this setting through the UI yet.");
       return;
@@ -1003,7 +1273,7 @@ const ServerDetailPage = () => {
     } catch (err) {
       window.alert((err as Error).message);
     }
-  }, [callRpc, fetchSettings]);
+  }, [callRpc, fetchSettings, settingDescriptorLookup]);
 
   const statusBadge = useMemo(() => {
     if (!server) {
@@ -1036,7 +1306,9 @@ const ServerDetailPage = () => {
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Current players</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Current players <span className="font-normal text-slate-500">({playersOnline.length})</span>
+          </h3>
           {playersLoading && playersOnline.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">Loading players…</p>
           ) : playersOnline.length === 0 ? (
@@ -1053,7 +1325,9 @@ const ServerDetailPage = () => {
           )}
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Allowlist</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Allowlist <span className="font-normal text-slate-500">({allowlist.length})</span>
+          </h3>
           {playersLoading && allowlist.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">Loading allowlist…</p>
           ) : allowlist.length === 0 ? (
@@ -1061,16 +1335,30 @@ const ServerDetailPage = () => {
           ) : (
             <ul className="mt-4 space-y-2 text-sm text-slate-100">
               {allowlist.map((item) => (
-                <li key={item.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
-                  <span>{item.name}</span>
-                  {item.id ? <span className="text-xs text-slate-500">{item.id}</span> : null}
+                <li key={item.name} className="flex items-center justify-between gap-3 rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
+                  <div className="flex flex-col">
+                    <span>{item.name}</span>
+                    {item.id ? <span className="text-xs text-slate-500">{item.id}</span> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleAllowlistEntryRemove(item.name);
+                    }}
+                    disabled={!canModerate || !server?.connected || playersLoading}
+                    className="rounded border border-slate-700 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-sky disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Operators</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Operators <span className="font-normal text-slate-500">({operators.length})</span>
+          </h3>
           {playersLoading && operators.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">Loading operators…</p>
           ) : operators.length === 0 ? (
@@ -1086,9 +1374,21 @@ const ServerDetailPage = () => {
                   badges.push("Bypasses limit");
                 }
                 return (
-                  <li key={operator.name} className="flex items-center justify-between rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
-                    <span>{operator.name}</span>
-                    {badges.length > 0 ? <span className="text-xs text-slate-500">{badges.join(" · ")}</span> : null}
+                  <li key={operator.name} className="rounded border border-slate-800/60 bg-slate-900/50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{operator.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleOperatorEntryRemove(operator.name);
+                        }}
+                        disabled={!canModerate || !server?.connected || playersLoading}
+                        className="rounded border border-slate-700 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-sky disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Demote
+                      </button>
+                    </div>
+                    {badges.length > 0 ? <p className="mt-1 text-xs text-slate-500">{badges.join(" · ")}</p> : null}
                   </li>
                 );
               })}
@@ -1096,7 +1396,9 @@ const ServerDetailPage = () => {
           )}
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Bans & IP bans</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Bans &amp; IP bans <span className="font-normal text-slate-500">({bans.length})</span>
+          </h3>
           {playersLoading && bans.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">Loading bans…</p>
           ) : bans.length === 0 ? (
@@ -1131,35 +1433,35 @@ const ServerDetailPage = () => {
       <div className="grid gap-6 md:grid-cols-2">
         <RpcActionCard
           title="Add to allowlist"
-          description="Allow a player to join the server."
-          buttonLabel="Add player"
+          description="Allow one or more players to join the server (enter comma or newline separated names)."
+          buttonLabel="Add players"
           disabled={!canModerate || !server?.connected}
           onSubmit={handleAllowlistAdd}
-          fields={[{ name: "username", label: "Player username", placeholder: "Notch", required: true }]}
+          fields={[{ name: "username", label: "Player usernames", placeholder: "Notch\nAlex\nSteve", type: "textarea", rows: 3, required: true }]}
         />
         <RpcActionCard
           title="Remove from allowlist"
-          description="Revoke access for a player."
-          buttonLabel="Remove player"
+          description="Revoke access for players (enter comma or newline separated names)."
+          buttonLabel="Remove players"
           disabled={!canModerate || !server?.connected}
           onSubmit={handleAllowlistRemove}
-          fields={[{ name: "username", label: "Player username", placeholder: "Notch", required: true }]}
+          fields={[{ name: "username", label: "Player usernames", placeholder: "Notch\nAlex", type: "textarea", rows: 3, required: true }]}
         />
         <RpcActionCard
           title="Promote to operator"
-          description="Grant operator privileges to a player."
-          buttonLabel="Promote"
+          description="Grant operator privileges to players (enter comma or newline separated names)."
+          buttonLabel="Promote players"
           disabled={!canModerate || !server?.connected}
           onSubmit={handleOperatorAdd}
-          fields={[{ name: "username", label: "Player username", placeholder: "Player", required: true }]}
+          fields={[{ name: "username", label: "Player usernames", placeholder: "PlayerOne\nPlayerTwo", type: "textarea", rows: 3, required: true }]}
         />
         <RpcActionCard
           title="Remove operator"
-          description="Remove operator status from a player."
-          buttonLabel="Demote"
+          description="Remove operator status from players (enter comma or newline separated names)."
+          buttonLabel="Demote players"
           disabled={!canModerate || !server?.connected}
           onSubmit={handleOperatorRemove}
-          fields={[{ name: "username", label: "Player username", placeholder: "Player", required: true }]}
+          fields={[{ name: "username", label: "Player usernames", placeholder: "PlayerOne\nPlayerTwo", type: "textarea", rows: 3, required: true }]}
         />
       </div>
     </div>

@@ -12,6 +12,7 @@ var rbacRules = []rbacRule{
 	{prefix: "minecraft:server/save", role: RoleModerator},
 	{prefix: "minecraft:server/system_message", role: RoleModerator},
 	{prefix: "minecraft:server/status", role: RoleViewer},
+	{prefix: "minecraft:players/", role: RoleModerator},
 	{prefix: "minecraft:players", role: RoleViewer},
 	{prefix: "minecraft:gamerules/update", role: RoleModerator},
 	{prefix: "minecraft:gamerules", role: RoleViewer},
@@ -20,7 +21,9 @@ var rbacRules = []rbacRule{
 	{prefix: "minecraft:allowlist", role: RoleViewer},
 	{prefix: "minecraft:operators/", role: RoleModerator},
 	{prefix: "minecraft:operators", role: RoleModerator},
+	{prefix: "minecraft:bans/", role: RoleModerator},
 	{prefix: "minecraft:bans", role: RoleModerator},
+	{prefix: "minecraft:ip_bans/", role: RoleModerator},
 	{prefix: "minecraft:ip_bans", role: RoleModerator},
 }
 

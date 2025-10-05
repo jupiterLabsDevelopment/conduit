@@ -12,6 +12,7 @@ interface Props {
     placeholder?: string;
     type?: string;
     required?: boolean;
+    rows?: number;
   }>;
 }
 
@@ -47,16 +48,29 @@ export const RpcActionCard = ({ title, description, buttonLabel = "Submit", disa
             <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400" htmlFor={field.name}>
               {field.label}
             </label>
-            <input
-              id={field.name}
-              type={field.type ?? "text"}
-              value={values[field.name] ?? ""}
-              required={field.required}
-              placeholder={field.placeholder}
-              onChange={(evt: ChangeEvent<HTMLInputElement>) =>
-                setValues((prev: Record<string, string>) => ({ ...prev, [field.name]: evt.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky"
-            />
+            {field.type === "textarea" ? (
+              <textarea
+                id={field.name}
+                value={values[field.name] ?? ""}
+                required={field.required}
+                placeholder={field.placeholder}
+                rows={field.rows ?? 4}
+                onChange={(evt: ChangeEvent<HTMLTextAreaElement>) =>
+                  setValues((prev: Record<string, string>) => ({ ...prev, [field.name]: evt.target.value }))}
+                className="mt-1 w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky"
+              />
+            ) : (
+              <input
+                id={field.name}
+                type={field.type ?? "text"}
+                value={values[field.name] ?? ""}
+                required={field.required}
+                placeholder={field.placeholder}
+                onChange={(evt: ChangeEvent<HTMLInputElement>) =>
+                  setValues((prev: Record<string, string>) => ({ ...prev, [field.name]: evt.target.value }))}
+                className="mt-1 w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky"
+              />
+            )}
           </div>
         ))}
         {error ? <p className="text-sm text-rose-400">{error}</p> : null}
