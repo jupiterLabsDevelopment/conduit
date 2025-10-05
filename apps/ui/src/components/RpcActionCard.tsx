@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 interface Props {
   title: string;
@@ -21,6 +21,41 @@ export const RpcActionCard = ({ title, description, buttonLabel = "Submit", disa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValues((prev) => {
+      if (fields.length === 0) {
+        return Object.keys(prev).length === 0 ? prev : {};
+      }
+
+      const next: Record<string, string> = {};
+      const nameSet = new Set<string>();
+      let changed = false;
+
+      for (const field of fields) {
+        nameSet.add(field.name);
+        if (Object.prototype.hasOwnProperty.call(prev, field.name)) {
+          next[field.name] = prev[field.name];
+        } else {
+          next[field.name] = "";
+          changed = true;
+        }
+      }
+
+      const prevKeys = Object.keys(prev);
+      if (prevKeys.length !== nameSet.size) {
+        changed = true;
+      }
+      for (const key of prevKeys) {
+        if (!nameSet.has(key)) {
+          changed = true;
+          break;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [fields]);
 
   const handleSubmit = async (evt: FormEvent<HTMLFormElement>) => {
     evt.preventDefault();
@@ -51,6 +86,7 @@ export const RpcActionCard = ({ title, description, buttonLabel = "Submit", disa
             {field.type === "textarea" ? (
               <textarea
                 id={field.name}
+                name={field.name}
                 value={values[field.name] ?? ""}
                 required={field.required}
                 placeholder={field.placeholder}
@@ -63,6 +99,7 @@ export const RpcActionCard = ({ title, description, buttonLabel = "Submit", disa
               <input
                 id={field.name}
                 type={field.type ?? "text"}
+                name={field.name}
                 value={values[field.name] ?? ""}
                 required={field.required}
                 placeholder={field.placeholder}
