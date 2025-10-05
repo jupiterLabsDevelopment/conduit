@@ -50,7 +50,6 @@ func NewApp(db *pgxpool.Pool, cfg Config, logger *slog.Logger) *App {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
@@ -60,10 +59,13 @@ func NewApp(db *pgxpool.Pool, cfg Config, logger *slog.Logger) *App {
 		MaxAge:           300,
 	}))
 
-	r.Post("/v1/users/bootstrap", app.handleBootstrap)
-	r.Post("/v1/auth/login", app.handleLogin)
+	timeout := middleware.Timeout(60 * time.Second)
+
+	r.With(timeout).Post("/v1/users/bootstrap", app.handleBootstrap)
+	r.With(timeout).Post("/v1/auth/login", app.handleLogin)
 
 	r.Route("/v1", func(r chi.Router) {
+		r.Use(timeout)
 		r.Group(func(r chi.Router) {
 			r.Use(app.authMiddleware)
 			r.Post("/auth/logout", app.handleLogout)
