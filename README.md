@@ -7,7 +7,7 @@
 
 ## Description
 
-Conduit is a self-hosted control plane for Minecraft servers. It bridges the Minecraft Management API to a secure REST/WebSocket API, provides a modern admin UI, and records every action for audit. Owners and moderators can operate servers remotely without exposing management secrets or sacrificing visibility.
+Conduit is a self-hosted control panel for Minecraft servers. It bridges the Minecraft Management API to a secure REST/WebSocket API, provides a modern admin UI, and records every action for audit. Owners and moderators can operate servers remotely without exposing management secrets or sacrificing visibility.
 
 **Built for** server admins who need a lightweight but secure way to manage remote Minecraft instances. **Key features include:**
 
