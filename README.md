@@ -132,11 +132,8 @@ The full catalogue of environment variables, operational runbooks, and telemetry
 
 ## Architecture / How It Works
 
-```text
-[ Browser UI ] ⇄ HTTPS ⇄ [ Conduit API ] ⇄ WS ⇄ [ Agent ] ⇄ WS ⇄ [ Minecraft Management API ]
-                                            │
-                                            └── Postgres (users, sessions, audit, schema)
-```
+![conduit drawio_887543d0](https://github.com/user-attachments/assets/beb5de79-6efa-414c-bde4-9db44e8684bc)
+
 
 - The **UI** authenticates with JWTs, calls REST endpoints, and subscribes to server events via WebSocket.
 - The **API** enforces RBAC, maintains an agent hub, relays JSON-RPC calls, and records audit entries.
